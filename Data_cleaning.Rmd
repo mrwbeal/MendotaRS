@@ -1,0 +1,87 @@
+
+Data processing code
+*note must remove infinity symbol in csv to import correctly
+1/31/20 - using for mendota data 2020
+1/4/21 - using for mendota data 2021
+
+
+Libraries
+```{r}
+library(chron)
+setwd("~/Desktop/PhD/Sampling/Mendota_data/2022")
+```
+
+
+Read Data
+```{r}
+setwd("~/Desktop/PhD/Sampling/Mendota_data/2022")
+datafile = "mendota_all_2022.csv"
+referencefile = "mendota_2022_reference.csv"
+df<-read.csv(datafile)
+ref<-read.csv(referencefile)
+
+
+#omit NA rows
+#ref<-na.omit(ref)
+
+#Make an empty dataframe to bind to later
+datacols<-names(df)[-c(4,5)]
+final_data<-data.frame(matrix(vector(), 1, 28,
+                dimnames=list(c(), c(datacols))),
+                stringsAsFactors=F)
+
+#Set times
+oneminute <- times("00:01:00")
+twominutes<-times("00:02:00")    
+              
+#Get the unique sample dates
+Dates <- unique(ref$Date)
+i=1
+for (i in 1:length(Dates)) {
+#Subset the reference and data file by date
+ref.sub<-ref[ref$Date==Dates[i],]
+df.sub<-df[df$Date==Dates[i],]
+
+ref.sub$TimeDif<-min(times(ref.sub$StartTime),na.rm = T) - min(times(df.sub$Time),na.rm=T)
+
+#Subtract the time lag from the data
+df.sub$RealTime = times(df.sub$Time)+times(unique(ref.sub$TimeDif))
+
+for (j in 1:nrow(ref.sub)) {
+  #Check if there was data taken at the time interval (If data exists both TRUE and FALSE are returned)
+ if (length(unique(times(df.sub$RealTime)>=times(ref.sub$StartTime[j]) + oneminute  & times(df.sub$RealTime)<times(ref.sub$StartTime[j]) + twominutes))==2) {
+  #subset the second minute of the data
+  hold<-df.sub[times(df.sub$RealTime)>=times(ref.sub$StartTime[j]) + oneminute 
+               & times(df.sub$RealTime)<times(ref.sub$StartTime[j]) + twominutes,]
+  
+  #Take the average over the second minute and put into data frame with date, site ID, and start time
+  datapoint<-data.frame("Date"=ref.sub$Date[j],
+                        "Time"=ref.sub$StartTime[j]+oneminute,
+                        "Site"=ref.sub$Grid[j],
+                        t(colMeans(hold[,c(6:30)])))
+  
+  final_data<-rbind(final_data,datapoint)
+ }
+  else{next}
+  }
+}
+
+final_data<-final_data[-1,]
+
+ysivars<-c("Date","Time","Grid","C-19G100574",	"mmHg-13E101284",	"ODO...sat",	"DO %L-19G102396",	"ODO.mg.L",	"SpCond.uS.cm",	"C-uS/cm-19G100574",	"nLFC-uS/cm-19G100574",	"TDS mg/L-19G100574",	"SAL-PSU-19G100574",	"pH",	"pH mV-13E101565",	"ORP mV-13E101565",	"Turbidity.FNU",	"TSS mg/L-13E101322",	"BGA.PC.RFU",	"Chlorophyll.RFU",	"fDOM.RFU",	"fDOM.QSU",	"Depth.m",	"Vpos m-13D102108",	"Press.psi.a",	"Wiper V-19H101164",	"Cable V-13E101468",	"Batt V-13E101468")
+
+
+finalvars<-c("Date","Time","Grid","C-19G100574","ODO...sat",	"ODO.mg.L",	"SpCond.uS.cm",	"pH",	"Turbidity.FNU",	"BGA.PC.RFU",	"Chlorophyll.RFU",	"fDOM.RFU",	"fDOM.QSU",	"Depth.m","Press.psi.a")
+
+colnames(final_data) <- ysivars
+
+final_data<-final_data[,finalvars]
+
+
+
+final_data
+
+#write.csv(final_data,"Final Data/Mendota_2022.csv")
+
+```
+

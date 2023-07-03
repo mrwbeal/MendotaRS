@@ -1,0 +1,94 @@
+---
+title: "Sampling Plan"
+output: pdf_document
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, libraries, include=FALSE}
+library(sp) 
+library(sf)
+library(rgdal)
+library(ggplot2)
+library(rmarkdown)
+library(kableExtra)
+```
+
+```{r, Settings, include=FALSE}
+#This Notebook will generate random points within 35 grid boxes set over lake Mendota for sampling. One site will always be included at the deep hole (buoy) site.
+#Settings
+setwd("~/Desktop/PhD/Sampling")
+SampleDate = "_________"
+Time_Lag = "__________"
+
+```
+
+
+```{r, Setup, include=FALSE}
+mendota<-st_read("box_sampling_bryan/MendotaOutline.shp")
+bounds<-st_read("box_sampling_bryan/MendotaSamplingBoundaries.shp")
+ID<-read.csv("Mendota_PointID.csv")
+DeepHole <-data.frame("longitude"=-89.407778,"latitude"=43.098333)
+
+
+sub<-bounds[bounds$id==bounds$id[1],]
+points<-st_sample(sub, 1,type="random", by_polygon=F)
+
+for (i in 2:nrow(bounds)) {
+sub<-bounds[bounds$id==bounds$id[i],]
+point_sub<-st_sample(sub, 1,type="random", by_polygon=F)
+points<-rbind(points,point_sub)
+}
+
+#bounds<-st_join(bounds, points)
+
+df <- data.frame(matrix(unlist(points), nrow=length(points), byrow=TRUE))
+
+df$ID <- ID$PointID
+
+
+DeepHole <- st_as_sf(DeepHole, coords=c("longitude", "latitude"), crs = 4326)
+DeepHole <- st_transform(DeepHole, crs=st_crs(mendota))
+
+df<-rbind(df,c(unlist(DeepHole$geometry)[1],unlist(DeepHole$geometry)[2],"DH"))
+
+#Longitude, Latitude
+points<-st_as_sf(df, coords = c("X1", "X2"), crs = st_crs(mendota))
+
+
+#In Decimal Degrees:
+point_DD<-st_transform(points, crs=4326)
+point_DD<-as.data.frame(st_coordinates(point_DD$geometry))
+
+#ELISA/Cell enumeration points (2, deep hole, 35)
+grabsamples<-points[points$ID %in% c(2,35),]
+
+kmlpoints<-SpatialPointsDataFrame(point_DD,point_DD, proj4string = CRS(st_crs(points)$proj4string))
+
+
+#Write KML files for phone
+writeOGR(kmlpoints, "points.kml",layer=mendota, driver="KML") 
+
+
+
+
+```
+
+
+```{r Sample Plan, include=TRUE}
+print(SampleDate)
+print(Time_Lag)
+
+ggplot() +
+  geom_sf(data=mendota, fill="skyblue") + geom_sf(data=sub, fill=NA, col="yellow") + geom_sf(data=bounds, fill=NA, col="black") + geom_sf(data = points) + geom_sf(data = grabsamples, color="red") + geom_sf(data = DeepHole, color="red")#+geom_sf_label(data=bounds,aes(label = ID), size=1.5)
+#Note: Deep Hole point not included on map
+sampletable<-data.frame("ID"=c(df$ID),"longitude"=c(point_DD$X),"latitude"=c(point_DD$Y),"Start Time (hh:mm:ss)"="","Sample longitude"="","Sample latitude"="","Cells/ELISA"="")
+knitr::kable(sampletable[order(as.numeric(sampletable$ID)),]) %>% kable_styling()
+
+
+```
+
